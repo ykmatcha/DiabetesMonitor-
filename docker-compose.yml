@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: diabetes_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: diabetes_user
+      POSTGRES_PASSWORD: diabetes_pass
+      POSTGRES_DB: diabetes_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diabetes_user -d diabetes_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: diabetes_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg2://diabetes_user:diabetes_pass@db:5432/diabetes_platform
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - model_data:/app/saved_models
+
+  frontend:
+    build: ./frontend
+    container_name: diabetes_dashboard
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: http://backend:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
+  model_data:
